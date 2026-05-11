@@ -1,12 +1,10 @@
-# TikTok Backend Clone
+# QueVesVe!& Backend
 
 ## Description
 
-This project is a backend clone of the popular social media app TikTok, created for educational purposes. The aim is to recreate key functionalities of TikTok, applying technologies and best practices in software development that I've learned throughout my career. This repository contains the server-side code and API endpoints. 💻
+Backend del aplicativo **QueVesVe!&**, una plataforma de videos cortos. Contiene el código del servidor y los endpoints de la API REST.
 
 ## Features
-
-This project implements a variety of functionalities inspired by TikTok, structured into different endpoints to emulate key operations of a social network. The endpoints currently developed or in development are as follows:
 
 ### 1) Users (90%):
 - **User Registration**: Allows new users to create an account. `POST /users/register`
@@ -46,20 +44,14 @@ This project implements a variety of functionalities inspired by TikTok, structu
 
 ## Getting Started
 
-To get started with the TikTok Clone backend, follow these steps:
-
-1. Clone the repository: `git clone https://github.com/EdinsonRequena/tiktok-backend-clone`
+1. Clone the repository
 2. Install the dependencies: `pipenv install Pipfile`
-3. Set up the environment variables (e.g., database connection, Postgres credentials)
+3. Set up the environment variables (database connection, Postgres credentials)
 4. Start the server: `python manage.py runserver`
 
 ## Contributing
 
-Contributions are welcome! If you find any issues or have suggestions for improvements, please open an issue or submit a pull request. PRs must have a minimum of 80% test coverage to be accepted.
-
-## Authors
-
-- Edinson Requena - [LinkedIn](https://www.linkedin.com/in/edinson-requena-9496a2178/) | [Twitter](https://twitter.com/RequenaEA) | [Instagram](https://www.instagram.com/edinsonrequena/) | [GitHub](https://github.com/EdinsonRequena)
+Contributions are welcome! PRs must have a minimum of 80% test coverage to be accepted.
 
 ## License
 
