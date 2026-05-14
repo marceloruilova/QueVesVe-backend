@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 
 from django.http import HttpRequest
 
@@ -22,6 +23,8 @@ class UserProfileAPIView(APIView):
     - put: Update a user profile by user ID.
     - delete: Delete a user profile by user ID.
     """
+
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get(self, request: HttpRequest, userid: int) -> Response:
         """
@@ -55,6 +58,8 @@ class UserProfileAPIView(APIView):
         Returns:
             Response: The HTTP response containing the updated user data or an error message.
         """
+        if request.user.id != userid:
+            return Response({'error': 'You can only update your own profile.'}, status=status.HTTP_403_FORBIDDEN)
         try:
             user = CustomUser.objects.get(pk=userid)
             serializer = CustomUserSerializer(
@@ -84,7 +89,8 @@ class UserProfileAPIView(APIView):
         Returns:
             Response: The HTTP response indicating the success or failure of the deletion.
         """
-        # TODO: Add a check to ensure that the user is deleting their own profile.
+        if request.user.id != userid:
+            return Response({'error': 'You can only delete your own profile.'}, status=status.HTTP_403_FORBIDDEN)
         try:
             user = CustomUser.objects.get(pk=userid)
             user.delete()

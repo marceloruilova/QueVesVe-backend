@@ -1,0 +1,94 @@
+name: CI + Deploy
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Tests & Quality
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install pipenv
+          pipenv install --dev --system
+
+      - name: Run migrations
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DATABASE_NAME: test_db
+          DATABASE_USER: test_user
+          DATABASE_PASSWORD: test_password
+          DATABASE_HOST: localhost
+          DATABASE_PORT: 5432
+        run: python manage.py migrate --noinput
+
+      - name: Run tests with coverage
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DATABASE_NAME: test_db
+          DATABASE_USER: test_user
+          DATABASE_PASSWORD: test_password
+          DATABASE_HOST: localhost
+          DATABASE_PORT: 5432
+        run: |
+          coverage run --source='.' manage.py test
+          coverage xml -o coverage.xml
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        with:
+          projectBaseDir: .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_CLOUD_TOKEN }}
+
+  deploy:
+    name: Deploy to DigitalOcean
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USERNAME }}
+          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.DO_SSH_PORT }}
+          script: |
+            cd /opt/quevesve
+            git fetch origin main && git reset --hard origin/main
+            docker compose -f docker-compose.prod.yml --env-file .env.production build --no-cache
+            docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans
+            sleep 15
+            curl -sf http://localhost:8082/api/health/ || exit 1
+            docker image prune -f
+            echo "Deploy exitoso."

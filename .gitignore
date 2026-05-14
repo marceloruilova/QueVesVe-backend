@@ -196,3 +196,12 @@ pip-selfcheck.json
 
 # env
 .env
+.env.production
+
+# SSL certificates — nunca commitear
+ssl/*.pem
+ssl/*.key
+ssl/*.crt
+
+# Static files generados por collectstatic
+staticfiles/
