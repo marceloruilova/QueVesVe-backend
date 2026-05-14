@@ -42,6 +42,7 @@ jobs:
       - name: Run migrations
         env:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_DEBUG: "True"
           TEST_DATABASE_NAME: test_db_name
           TEST_DATABASE_USER: test_db_user
           TEST_DATABASE_PASSWORD: test_db_password
@@ -52,6 +53,7 @@ jobs:
       - name: Run tests with coverage
         env:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_DEBUG: "True"
           TEST_DATABASE_NAME: test_db_name
           TEST_DATABASE_USER: test_db_user
           TEST_DATABASE_PASSWORD: test_db_password
