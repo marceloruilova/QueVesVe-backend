@@ -13,7 +13,10 @@ WORKDIR /app
 
 # Copy installed packages from builder
 COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
-COPY --from=builder /usr/local/bin/gunicorn /usr/local/bin/gunicorn
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Install gunicorn
+RUN pip install --no-cache-dir gunicorn
 
 # Copy project source
 COPY . .
