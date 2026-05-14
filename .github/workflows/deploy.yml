@@ -15,9 +15,9 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_DB: test_db
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db_name
+          POSTGRES_USER: test_db_user
+          POSTGRES_PASSWORD: test_db_password
         ports:
           - 5432:5432
         options: >-
@@ -42,21 +42,21 @@ jobs:
       - name: Run migrations
         env:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-          DATABASE_NAME: test_db
-          DATABASE_USER: test_user
-          DATABASE_PASSWORD: test_password
-          DATABASE_HOST: localhost
-          DATABASE_PORT: 5432
+          TEST_DATABASE_NAME: test_db_name
+          TEST_DATABASE_USER: test_db_user
+          TEST_DATABASE_PASSWORD: test_db_password
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: 5432
         run: python manage.py migrate --noinput
 
       - name: Run tests with coverage
         env:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-          DATABASE_NAME: test_db
-          DATABASE_USER: test_user
-          DATABASE_PASSWORD: test_password
-          DATABASE_HOST: localhost
-          DATABASE_PORT: 5432
+          TEST_DATABASE_NAME: test_db_name
+          TEST_DATABASE_USER: test_db_user
+          TEST_DATABASE_PASSWORD: test_db_password
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: 5432
         run: |
           coverage run --source='.' manage.py test
           coverage xml -o coverage.xml
