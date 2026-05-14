@@ -1,6 +1,7 @@
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from users.models.custom_user_models import CustomUser
 
@@ -17,7 +18,9 @@ class UserProfileAPIViewTest(APITestCase):
             username='testuser', email='test@example.com', password=self.user_password)
 
         self.url = reverse('user_profile', kwargs={'userid': self.user.pk})
-        self.client.login(username='testuser', password=self.user_password)
+
+        refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
 
         self.update_data = {
             'bio': 'Updated bio',
@@ -49,7 +52,6 @@ class UserProfileAPIViewTest(APITestCase):
         Ensure that a user can delete their own profile.
         """
 
-        self.client.login(username='testuser', password='testpassword123')
         response = self.client.delete(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
