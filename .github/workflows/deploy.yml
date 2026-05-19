@@ -80,7 +80,8 @@ jobs:
           script: |
             cd /opt/quevesve
             git fetch origin main && git reset --hard origin/main
-            docker compose -f docker-compose.prod.yml --env-file .env.production build --no-cache
+            docker builder prune -f
+            docker compose -f docker-compose.prod.yml --env-file .env.production build
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans
             sleep 15
             curl -sf http://localhost:8082/api/health/ || exit 1
