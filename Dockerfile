@@ -3,7 +3,7 @@
 # 1. Install dependencies
 FROM python:3.10-slim AS builder
 WORKDIR /app
-RUN pip install --no-cache-dir pipenv
+RUN pip install --no-cache-dir pipenv gunicorn
 COPY Pipfile Pipfile.lock ./
 RUN pipenv install --deploy --system --ignore-pipfile
 
@@ -11,12 +11,9 @@ RUN pipenv install --deploy --system --ignore-pipfile
 FROM python:3.10-slim AS runner
 WORKDIR /app
 
-# Copy installed packages from builder
+# Copy installed packages and binaries (including gunicorn) from builder
 COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Install gunicorn
-RUN pip install --no-cache-dir gunicorn
 
 # Copy project source
 COPY . .
