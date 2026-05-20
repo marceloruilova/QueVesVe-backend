@@ -78,10 +78,12 @@ jobs:
           key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
           port: ${{ secrets.DO_SSH_PORT }}
           script: |
+            git config --global --add safe.directory /opt/quevesve
             cd /opt/quevesve
             git fetch origin main && git reset --hard origin/main
             git show origin/main:Dockerfile > Dockerfile
             git show origin/main:entrypoint.sh > entrypoint.sh
+            chmod +x entrypoint.sh
             docker builder prune -f
             docker compose -f docker-compose.prod.yml --env-file .env.production build
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans
