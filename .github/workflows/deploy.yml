@@ -86,8 +86,8 @@ jobs:
             chmod +x entrypoint.sh
             docker builder prune -f
             docker compose -f docker-compose.prod.yml --env-file .env.production build
-            docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans || (echo "=== WEB LOGS ===" && docker logs quevesve-web-prod --tail 50 && exit 1)
             sleep 15
-            curl -sf http://localhost:8082/api/health/ || exit 1
+            curl -sf http://localhost:8082/api/health/ || (echo "=== WEB LOGS ===" && docker logs quevesve-web-prod --tail 50 && exit 1)
             docker image prune -f
             echo "Deploy exitoso."
