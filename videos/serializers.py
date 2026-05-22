@@ -13,12 +13,15 @@ class VideoSerializer(serializers.ModelSerializer):
     video_file = serializers.FileField(write_only=True)
 
     def get_likes(self, obj):
-        return obj.likes.count()
+        # usa el prefetch cache en lugar de lanzar COUNT query por cada video
+        return len(obj.likes.all())
 
     def get_liked_by_user(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.likes.filter(user=request.user).exists()
+            uid = request.user.id
+            # itera sobre el prefetch cache, sin query adicional
+            return any(like.user_id == uid for like in obj.likes.all())
         return False
 
     def get_uri(self, obj):
