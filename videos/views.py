@@ -16,7 +16,7 @@ class VideoListCreateView(APIView):
         if user_id:
             qs = qs.filter(user_id=user_id)
         serializer = VideoSerializer(qs, many=True, context={'request': request})
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = VideoSerializer(data=request.data, context={'request': request})
@@ -33,7 +33,7 @@ class VideoDetailView(APIView):
         try:
             video = Video.objects.select_related('user').prefetch_related('likes').get(pk=videoid)
             serializer = VideoSerializer(video, context={'request': request})
-            return Response(serializer.data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         except Video.DoesNotExist:
             return Response({'error': 'Video not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -46,8 +46,11 @@ class VideoLikeView(APIView):
             video = Video.objects.get(pk=videoid)
         except Video.DoesNotExist:
             return Response({'error': 'Video not found'}, status=status.HTTP_404_NOT_FOUND)
-        Like.objects.get_or_create(user=request.user, video=video)
-        return Response({'likes': video.likes.count(), 'liked_by_user': True})
+        _, created = Like.objects.get_or_create(user=request.user, video=video)
+        return Response(
+            {'likes': video.likes.count(), 'liked_by_user': True},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
     def delete(self, request, videoid):
         try:
@@ -55,7 +58,10 @@ class VideoLikeView(APIView):
         except Video.DoesNotExist:
             return Response({'error': 'Video not found'}, status=status.HTTP_404_NOT_FOUND)
         Like.objects.filter(user=request.user, video=video).delete()
-        return Response({'likes': video.likes.count(), 'liked_by_user': False})
+        return Response(
+            {'likes': video.likes.count(), 'liked_by_user': False},
+            status=status.HTTP_200_OK,
+        )
 
 
 class VideoCommentView(APIView):
@@ -64,7 +70,7 @@ class VideoCommentView(APIView):
     def get(self, request, videoid):
         comments = Comment.objects.filter(video_id=videoid).select_related('user')
         serializer = CommentSerializer(comments, many=True)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request, videoid):
         try:

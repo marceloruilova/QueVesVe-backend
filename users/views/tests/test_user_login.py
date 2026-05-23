@@ -48,3 +48,19 @@ class LoginUserAPIViewTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('error', response.data)
+
+    def test_wrong_credentials_error_message_exact(self):
+        """Exact error text for wrong password — frontend displays this."""
+        response = self.client.post(self.url, self.invalid_credentials)
+        self.assertEqual(response.data['error'], 'Wrong credentials.')
+
+    def test_missing_fields_returns_json_not_500(self):
+        """Missing body must return JSON error, never HTML 500."""
+        response = self.client.post(self.url, {})
+        self.assertNotEqual(response.status_code, 500)
+        self.assertIn('application/json', response['Content-Type'])
+
+    def test_login_success_content_type_is_json(self):
+        """Success response is always JSON."""
+        response = self.client.post(self.url, self.valid_credentials)
+        self.assertIn('application/json', response['Content-Type'])

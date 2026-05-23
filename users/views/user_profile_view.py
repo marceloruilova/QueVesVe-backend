@@ -70,7 +70,7 @@ class UserProfileAPIView(APIView):
                 return Response(
                     {'message': 'User has been updated successfully.',
                         'data': serializer.data, },
-                    status.HTTP_200_OK,
+                    status=status.HTTP_200_OK,
                 )
 
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
