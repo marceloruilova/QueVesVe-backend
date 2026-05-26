@@ -18,7 +18,6 @@ jobs:
           POSTGRES_DB: test_db_name
           POSTGRES_USER: test_db_user
           POSTGRES_PASSWORD: test_db_password
-          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
         ports:
           - 5432:5432
         options: >-
@@ -28,39 +27,29 @@ jobs:
           --health-retries 5
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Set up Python 3.11
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
-        python-version: 3.11
+        python-version: "3.11"
 
     - name: Install dependencies
       run: |
         pip install pipenv
-        pipenv install --dev
+        pipenv install --dev --skip-lock
 
     - name: Run migrations
       run: |
-        pipenv run python manage.py migrate
+        pipenv run python manage.py migrate --noinput
       env:
-          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-          DATABASE_NAME: ${{ secrets.TEST_DATABASE_NAME }}
-          DATABASE_USER: ${{ secrets.TEST_DATABASE_USER }}
-          DATABASE_PASSWORD: ${{ secrets.TEST_DATABASE_PASSWORD }}
-          DATABASE_HOST: ${{ secrets.TEST_DATABASE_HOST }}
-          DATABASE_PORT: ${{ secrets.TEST_DATABASE_PORT }}
+        DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
 
     - name: Run tests
       run: |
         pipenv run python manage.py test
       env:
-          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-          DATABASE_NAME: ${{ secrets.TEST_DATABASE_NAME }}
-          DATABASE_USER: ${{ secrets.TEST_DATABASE_USER }}
-          DATABASE_PASSWORD: ${{ secrets.TEST_DATABASE_PASSWORD }}
-          DATABASE_HOST: ${{ secrets.TEST_DATABASE_HOST }}
-          DATABASE_PORT: ${{ secrets.TEST_DATABASE_PORT }}
+        DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
 
     - name: Install PostgreSQL client
       run: |
@@ -72,20 +61,15 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-          pipenv run coverage run --source='.' manage.py test
-          pipenv run coverage xml -o coverage.xml
+        pipenv run coverage run --source='.' manage.py test
+        pipenv run coverage xml -o coverage.xml
       env:
-          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-          DATABASE_NAME: ${{ secrets.TEST_DATABASE_NAME }}
-          DATABASE_USER: ${{ secrets.TEST_DATABASE_USER }}
-          DATABASE_PASSWORD: ${{ secrets.TEST_DATABASE_PASSWORD }}
-          DATABASE_HOST: ${{ secrets.TEST_DATABASE_HOST }}
-          DATABASE_PORT: ${{ secrets.TEST_DATABASE_PORT }}
+        DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
 
     - name: SonarCloud Scan
       uses: SonarSource/sonarcloud-github-action@master
       with:
-          projectBaseDir: .
+        projectBaseDir: .
       env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_CLOUD_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_CLOUD_TOKEN }}
