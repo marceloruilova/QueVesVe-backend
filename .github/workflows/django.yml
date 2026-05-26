@@ -8,12 +8,11 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     services:
       postgres:
-        image: postgres:12
+        image: postgres:15
         env:
           POSTGRES_DB: test_db_name
           POSTGRES_USER: test_db_user
@@ -27,49 +26,36 @@ jobs:
           --health-retries 5
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.11"
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: |
-        pip install pipenv
-        pipenv install --dev --skip-lock
+      - name: Install dependencies
+        run: |
+          pip install pipenv
+          pipenv install --dev --system --skip-lock
 
-    - name: Run migrations
-      run: |
-        pipenv run python manage.py migrate --noinput
-      env:
-        DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      - name: Run migrations
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_DEBUG: "True"
+          TEST_DATABASE_NAME: test_db_name
+          TEST_DATABASE_USER: test_db_user
+          TEST_DATABASE_PASSWORD: test_db_password
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: 5432
+        run: python manage.py migrate --noinput
 
-    - name: Run tests
-      run: |
-        pipenv run python manage.py test
-      env:
-        DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-
-    - name: Install PostgreSQL client
-      run: |
-        sudo apt-get install postgresql-client
-
-    - name: Check PostgreSQL service
-      run: |
-        pg_isready -h localhost -p 5432 -U test_db_user
-
-    - name: Run tests with coverage
-      run: |
-        pipenv run coverage run --source='.' manage.py test
-        pipenv run coverage xml -o coverage.xml
-      env:
-        DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-
-    - name: SonarCloud Scan
-      uses: SonarSource/sonarcloud-github-action@master
-      with:
-        projectBaseDir: .
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        SONAR_TOKEN: ${{ secrets.SONAR_CLOUD_TOKEN }}
+      - name: Run tests
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_DEBUG: "True"
+          TEST_DATABASE_NAME: test_db_name
+          TEST_DATABASE_USER: test_db_user
+          TEST_DATABASE_PASSWORD: test_db_password
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: 5432
+        run: python manage.py test

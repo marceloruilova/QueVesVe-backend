@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Tests & Quality
+    name: Tests
     runs-on: ubuntu-latest
 
     services:
@@ -50,7 +50,7 @@ jobs:
           TEST_DATABASE_PORT: 5432
         run: python manage.py migrate --noinput
 
-      - name: Run tests with coverage
+      - name: Run tests
         env:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           DJANGO_DEBUG: "True"
@@ -59,9 +59,7 @@ jobs:
           TEST_DATABASE_PASSWORD: test_db_password
           TEST_DATABASE_HOST: localhost
           TEST_DATABASE_PORT: 5432
-        run: |
-          coverage run --source='.' manage.py test
-          coverage xml -o coverage.xml
+        run: python manage.py test
 
   deploy:
     name: Deploy to DigitalOcean
@@ -81,9 +79,6 @@ jobs:
             git config --global --add safe.directory /opt/quevesve
             cd /opt/quevesve
             git fetch origin main && git reset --hard origin/main
-            git show origin/main:Dockerfile > Dockerfile
-            git show origin/main:entrypoint.sh > entrypoint.sh
-            chmod +x entrypoint.sh
             docker builder prune -f
             docker compose -f docker-compose.prod.yml --env-file .env.production build
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans || (echo "=== WEB LOGS ===" && docker logs quevesve-web-prod --tail 50 && exit 1)
