@@ -40,7 +40,7 @@ class UserProfileAPIView(APIView):
         """
         try:
             user = CustomUser.objects.get(pk=userid)
-            serializer = CustomUserSerializer(user)
+            serializer = CustomUserSerializer(user, context={'request': request})
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         except CustomUser.DoesNotExist:

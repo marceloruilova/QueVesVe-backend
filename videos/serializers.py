@@ -3,6 +3,7 @@ from videos.models import Video, Comment
 
 
 class VideoSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
     profile_picture = serializers.ImageField(source='user.profile_picture', read_only=True)
     likes = serializers.SerializerMethodField()
@@ -39,12 +40,12 @@ class VideoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Video
         fields = [
-            'id', 'video_file', 'username', 'profile_picture',
+            'id', 'video_file', 'user_id', 'username', 'profile_picture',
             'description', 'tags', 'music', 'likes', 'comments',
             'liked_by_user', 'uri', 'thumbnail_url', 'created_at',
         ]
         read_only_fields = [
-            'likes', 'comments', 'liked_by_user', 'username',
+            'likes', 'comments', 'liked_by_user', 'user_id', 'username',
             'profile_picture', 'uri', 'thumbnail_url', 'created_at',
         ]
         extra_kwargs = {'video_file': {'write_only': True}}

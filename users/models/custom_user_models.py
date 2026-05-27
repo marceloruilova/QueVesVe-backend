@@ -8,3 +8,14 @@ class CustomUser(AbstractUser):
     bio = models.TextField(_("bio"), max_length=500, blank=True)
     profile_picture = models.ImageField(
         _("profile picture"), upload_to='profile_pictures/', null=True, blank=True)
+
+    # Perfil profesional
+    professional_title = models.CharField(max_length=200, blank=True)
+    professional_institution = models.CharField(max_length=300, blank=True)
+
+    # Verificación SENESCYT Ecuador
+    cedula = models.CharField(max_length=10, blank=True)
+    senescyt_number = models.CharField(max_length=50, blank=True)
+    senescyt_verified = models.BooleanField(default=False)
+    senescyt_verified_name = models.CharField(max_length=300, blank=True)
+    senescyt_verified_at = models.DateTimeField(null=True, blank=True)
