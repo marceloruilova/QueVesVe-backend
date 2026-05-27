@@ -4,6 +4,7 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from users.models.custom_user_models import CustomUser
+from users.models.follow_model import Follow
 
 
 class UserProfileAPIViewTest(APITestCase):
@@ -35,6 +36,38 @@ class UserProfileAPIViewTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['email'], 'test@example.com')
+
+    def test_profile_includes_social_fields(self):
+        """GET /users/<id>/ returns followers_count, following_count, is_following, and excludes cedula."""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+        self.assertIn('followers_count', data)
+        self.assertIn('following_count', data)
+        self.assertIn('is_following', data)
+        self.assertNotIn('cedula', data)
+        self.assertEqual(data['followers_count'], 0)
+        self.assertEqual(data['following_count'], 0)
+        self.assertFalse(data['is_following'])
+
+    def test_follow_unfollow_updates_counts(self):
+        """POST /follow/ increments count; DELETE decrements it."""
+        other = CustomUser.objects.create_user(
+            username='other', email='other@example.com', password='pass123')
+        follow_url = reverse('follow_user', kwargs={'userid': other.pk})
+
+        res = self.client.post(follow_url)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['followers_count'], 1)
+
+        other_url = reverse('user_profile', kwargs={'userid': other.pk})
+        profile = self.client.get(other_url).data
+        self.assertTrue(profile['is_following'])
+        self.assertEqual(profile['followers_count'], 1)
+
+        res = self.client.delete(follow_url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['followers_count'], 0)
 
     def test_update_user_profile(self):
         """
