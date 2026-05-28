@@ -9,6 +9,36 @@ from .serializers import ConversationSerializer, MessageSerializer
 
 User = get_user_model()
 
+_CHAT_BLOCK_MESSAGES = {
+    'age_missing': 'Necesitás agregar tu fecha de nacimiento en tu perfil para poder chatear.',
+    'underage': 'Solo usuarios mayores de 18 años pueden usar el chat.',
+    'other_age_missing': 'Este usuario aún no configuró su edad. El chat no está disponible.',
+    'other_underage': 'Este usuario no puede chatear (menor de edad).',
+    'no_mutual_follow': 'Solo podés chatear con personas que se siguen mutuamente.',
+}
+
+
+def _check_chat_eligibility(current_user, recipient):
+    """
+    Retorna (True, None, None) si el chat está habilitado entre los dos usuarios,
+    o (False, code, message) si hay alguna restricción.
+    """
+    if not current_user.birth_date:
+        return False, 'age_missing', _CHAT_BLOCK_MESSAGES['age_missing']
+    if not current_user.is_adult:
+        return False, 'underage', _CHAT_BLOCK_MESSAGES['underage']
+    if not recipient.birth_date:
+        return False, 'other_age_missing', _CHAT_BLOCK_MESSAGES['other_age_missing']
+    if not recipient.is_adult:
+        return False, 'other_underage', _CHAT_BLOCK_MESSAGES['other_underage']
+
+    follows_recipient = recipient.followers.filter(follower=current_user).exists()
+    followed_by_recipient = current_user.followers.filter(follower=recipient).exists()
+    if not (follows_recipient and followed_by_recipient):
+        return False, 'no_mutual_follow', _CHAT_BLOCK_MESSAGES['no_mutual_follow']
+
+    return True, None, None
+
 
 class ConversationListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -30,6 +60,13 @@ class ConversationListView(APIView):
             recipient = User.objects.get(id=recipient_id)
         except User.DoesNotExist:
             return Response({'error': 'Usuario no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        eligible, block_code, block_message = _check_chat_eligibility(request.user, recipient)
+        if not eligible:
+            return Response(
+                {'error': block_message, 'chat_blocked': block_code},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         existing = request.user.conversations.filter(participants=recipient)
         if existing.exists():
@@ -60,6 +97,15 @@ class MessageListView(APIView):
             conversation = request.user.conversations.get(id=conversation_id)
         except Conversation.DoesNotExist:
             return Response({'error': 'Conversación no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+
+        recipient = conversation.participants.exclude(id=request.user.id).first()
+        if recipient:
+            eligible, block_code, block_message = _check_chat_eligibility(request.user, recipient)
+            if not eligible:
+                return Response(
+                    {'error': block_message, 'chat_blocked': block_code},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         text = request.data.get('text', '').strip()
         if not text:

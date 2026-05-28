@@ -14,6 +14,8 @@ class CustomUserSerializer(serializers.ModelSerializer):
     following_count = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
 
+    is_adult = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -21,6 +23,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
             'professional_title', 'professional_institution',
             'cedula', 'senescyt_number',
             'senescyt_verified', 'senescyt_verified_name', 'senescyt_verified_at',
+            'birth_date', 'is_adult',
             'followers_count', 'following_count', 'is_following',
         ]
         extra_kwargs: Dict[str, Dict[str, Any]] = {
@@ -29,6 +32,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
             'senescyt_verified': {'read_only': True},
             'senescyt_verified_name': {'read_only': True},
             'senescyt_verified_at': {'read_only': True},
+            'is_adult': {'read_only': True},
         }
 
     def get_followers_count(self, obj) -> int:
@@ -36,6 +40,9 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
     def get_following_count(self, obj) -> int:
         return obj.following.count()
+
+    def get_is_adult(self, obj) -> bool:
+        return obj.is_adult
 
     def get_is_following(self, obj) -> bool:
         request = self.context.get('request')

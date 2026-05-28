@@ -19,3 +19,17 @@ class CustomUser(AbstractUser):
     senescyt_verified = models.BooleanField(default=False)
     senescyt_verified_name = models.CharField(max_length=300, blank=True)
     senescyt_verified_at = models.DateTimeField(null=True, blank=True)
+
+    # Edad
+    birth_date = models.DateField(null=True, blank=True)
+
+    @property
+    def is_adult(self):
+        if not self.birth_date:
+            return False
+        from django.utils import timezone
+        today = timezone.now().date()
+        age = today.year - self.birth_date.year - (
+            (today.month, today.day) < (self.birth_date.month, self.birth_date.day)
+        )
+        return age >= 18
