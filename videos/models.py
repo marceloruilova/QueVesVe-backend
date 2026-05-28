@@ -10,6 +10,7 @@ class Video(models.Model):
     music = models.CharField(max_length=200, blank=True)
     tags = models.CharField(max_length=500, blank=True)
     comments_count = models.PositiveIntegerField(default=0)
+    views_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     @property

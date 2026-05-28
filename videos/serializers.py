@@ -12,6 +12,13 @@ class VideoSerializer(serializers.ModelSerializer):
     uri = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
     video_file = serializers.FileField(write_only=True)
+    views_count = serializers.SerializerMethodField()
+
+    def get_views_count(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated and request.user.id == obj.user_id:
+            return obj.views_count
+        return None
 
     def get_likes(self, obj):
         # usa el prefetch cache en lugar de lanzar COUNT query por cada video
@@ -42,11 +49,11 @@ class VideoSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'video_file', 'user_id', 'username', 'profile_picture',
             'description', 'tags', 'music', 'likes', 'comments',
-            'liked_by_user', 'uri', 'thumbnail_url', 'created_at',
+            'liked_by_user', 'uri', 'thumbnail_url', 'views_count', 'created_at',
         ]
         read_only_fields = [
             'likes', 'comments', 'liked_by_user', 'user_id', 'username',
-            'profile_picture', 'uri', 'thumbnail_url', 'created_at',
+            'profile_picture', 'uri', 'thumbnail_url', 'views_count', 'created_at',
         ]
         extra_kwargs = {'video_file': {'write_only': True}}
 
