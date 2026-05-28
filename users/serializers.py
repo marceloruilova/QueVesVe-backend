@@ -2,6 +2,8 @@ from typing import Any, Dict
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.contrib.auth import password_validation
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 
 User = get_user_model()
@@ -40,6 +42,13 @@ class CustomUserSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.followers.filter(follower=request.user).exists()
         return False
+
+    def validate_password(self, value: str) -> str:
+        try:
+            password_validation.validate_password(value)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
+        return value
 
     def create(self, validated_data: Dict[str, Any]) -> User:
         user: User = User.objects.create_user(
