@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 
 from .models import Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer
+from users.models.follow_model import Follow
 
 User = get_user_model()
 
@@ -32,8 +33,8 @@ def _check_chat_eligibility(current_user, recipient):
     if not recipient.is_adult:
         return False, 'other_underage', _CHAT_BLOCK_MESSAGES['other_underage']
 
-    follows_recipient = recipient.followers.filter(follower=current_user).exists()
-    followed_by_recipient = current_user.followers.filter(follower=recipient).exists()
+    follows_recipient = Follow.objects.filter(follower=current_user, following=recipient).exists()
+    followed_by_recipient = Follow.objects.filter(follower=recipient, following=current_user).exists()
     if not (follows_recipient and followed_by_recipient):
         return False, 'no_mutual_follow', _CHAT_BLOCK_MESSAGES['no_mutual_follow']
 
