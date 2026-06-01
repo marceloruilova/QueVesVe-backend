@@ -24,6 +24,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
             'cedula', 'senescyt_number',
             'senescyt_verified', 'senescyt_verified_name', 'senescyt_verified_at',
             'birth_date', 'is_adult',
+            'email_verified',
             'followers_count', 'following_count', 'is_following',
         ]
         extra_kwargs: Dict[str, Dict[str, Any]] = {
@@ -33,6 +34,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
             'senescyt_verified_name': {'read_only': True},
             'senescyt_verified_at': {'read_only': True},
             'is_adult': {'read_only': True},
+            'email_verified': {'read_only': True},
         }
 
     def get_followers_count(self, obj) -> int:

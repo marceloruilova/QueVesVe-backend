@@ -20,6 +20,9 @@ class CustomUser(AbstractUser):
     senescyt_verified_name = models.CharField(max_length=300, blank=True)
     senescyt_verified_at = models.DateTimeField(null=True, blank=True)
 
+    # Verificación de email
+    email_verified = models.BooleanField(default=False)
+
     # Edad
     birth_date = models.DateField(null=True, blank=True)
 

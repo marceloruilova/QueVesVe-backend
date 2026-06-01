@@ -6,6 +6,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.http import HttpRequest
 
 from users.serializers import CustomUserSerializer
+from users.models.email_verification_token_model import EmailVerificationToken
+from users.services.email_service import send_verification_email
 
 
 class RegisterUserAPIView(APIView):
@@ -58,4 +60,6 @@ class RegisterUserAPIView(APIView):
         user = serializer.save()
         user.set_password(serializer.validated_data['password'])
         user.save()
+        token = EmailVerificationToken.objects.create(user=user)
+        send_verification_email(user.email, user.username, str(token.token))
         return user
