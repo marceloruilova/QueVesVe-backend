@@ -179,7 +179,7 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('EMAIL_HOST_USER', default='no-reply@quevesve.app')
+DEFAULT_FROM_EMAIL = f"QueVesVe!& <{config('EMAIL_HOST_USER', default='no-reply@quevesve.app')}>"
 BACKEND_BASE_URL = config('BACKEND_BASE_URL', default='http://localhost:8000')
 
 # CORS — permite que el frontend (Expo web/móvil) acceda a la API
