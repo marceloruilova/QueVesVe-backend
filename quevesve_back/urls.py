@@ -19,6 +19,7 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
+from django.views.generic import TemplateView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 
@@ -29,6 +30,8 @@ def health_check(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/health/', health_check, name='health_check'),
+    path('privacidad/', TemplateView.as_view(template_name='legal/privacidad.html'), name='privacidad'),
+    path('terminos/', TemplateView.as_view(template_name='legal/terminos.html'), name='terminos'),
     path('', include('users.urls')),
     path('', include('videos.urls')),
     path('', include('direct_messages.urls')),
