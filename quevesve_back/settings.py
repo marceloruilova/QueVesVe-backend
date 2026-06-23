@@ -42,6 +42,7 @@ LOCAL_APPS = [
     'users',
     'videos',
     'direct_messages',
+    'reports',
 ]
 
 DJANGO_APPS = [
