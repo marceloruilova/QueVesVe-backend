@@ -58,6 +58,7 @@ class LoginUserAPIView(APIView):
             logger.warning(FAILED_LOGIN_ATTEMPT, username)
             return Response({"error": WRONG_CREDENTIALS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
 
+        from django.utils import timezone
         from users.models.login_log_model import LoginLog
         LoginLog.objects.create(
             user=user,
@@ -65,6 +66,9 @@ class LoginUserAPIView(APIView):
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
             method='password',
         )
+        # JWT no llama a django.contrib.auth.login(), así que actualizamos last_login manualmente
+        user.last_login = timezone.now()
+        user.save(update_fields=['last_login'])
 
         refresh = RefreshToken.for_user(user)
         return Response({

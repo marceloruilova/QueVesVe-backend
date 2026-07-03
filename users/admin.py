@@ -21,8 +21,9 @@ class CustomUserAdmin(UserAdmin):
     )
 
     def last_login_display(self, obj):
-        log = obj.login_logs.first()
-        return log.created_at.strftime('%d/%m/%Y %H:%M') if log else '—'
+        if obj.last_login:
+            return obj.last_login.strftime('%d/%m/%Y %H:%M')
+        return '—'
     last_login_display.short_description = 'Último acceso'
 
 

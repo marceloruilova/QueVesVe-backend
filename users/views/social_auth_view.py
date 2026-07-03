@@ -73,6 +73,7 @@ class SocialAuthAPIView(APIView):
 
         user = _get_or_create_social_user(user_info['email'], user_info.get('name', ''))
 
+        from django.utils import timezone
         from users.models.login_log_model import LoginLog
         LoginLog.objects.create(
             user=user,
@@ -80,6 +81,8 @@ class SocialAuthAPIView(APIView):
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
             method=provider,
         )
+        user.last_login = timezone.now()
+        user.save(update_fields=['last_login'])
 
         refresh = RefreshToken.for_user(user)
         return Response(

@@ -10,6 +10,7 @@ class VideoAdmin(admin.ModelAdmin):
     search_fields = ('description', 'tags', 'author_name', 'external_id')
     readonly_fields = ('external_id', 'source_type', 'source_url', 'license', 'author_name')
     date_hierarchy = 'created_at'
+    list_select_related = ('user',)
 
     def username(self, obj):
         return obj.user.username
