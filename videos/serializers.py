@@ -13,6 +13,9 @@ class VideoSerializer(serializers.ModelSerializer):
     thumbnail_url = serializers.SerializerMethodField()
     video_file = serializers.FileField(write_only=True)
     views_count = serializers.SerializerMethodField()
+    category = serializers.CharField(read_only=True)
+    source_type = serializers.CharField(read_only=True)
+    author_name = serializers.CharField(read_only=True)
 
     def get_views_count(self, obj):
         request = self.context.get('request')
@@ -50,10 +53,12 @@ class VideoSerializer(serializers.ModelSerializer):
             'id', 'video_file', 'user_id', 'username', 'profile_picture',
             'description', 'tags', 'music', 'likes', 'comments',
             'liked_by_user', 'uri', 'thumbnail_url', 'views_count', 'created_at',
+            'category', 'source_type', 'author_name',
         ]
         read_only_fields = [
             'likes', 'comments', 'liked_by_user', 'user_id', 'username',
             'profile_picture', 'uri', 'thumbnail_url', 'views_count', 'created_at',
+            'category', 'source_type', 'author_name',
         ]
         extra_kwargs = {'video_file': {'write_only': True}}
 

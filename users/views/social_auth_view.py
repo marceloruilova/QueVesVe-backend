@@ -12,6 +12,13 @@ from users.models.custom_user_models import CustomUser
 from users.serializers import CustomUserSerializer
 
 
+def _get_client_ip(request):
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
 def _generate_unique_username(email_prefix: str) -> str:
     base = re.sub(r'[^a-zA-Z0-9_]', '', email_prefix)[:28] or 'user'
     candidate = base
@@ -65,6 +72,15 @@ class SocialAuthAPIView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_401_UNAUTHORIZED)
 
         user = _get_or_create_social_user(user_info['email'], user_info.get('name', ''))
+
+        from users.models.login_log_model import LoginLog
+        LoginLog.objects.create(
+            user=user,
+            ip_address=_get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+            method=provider,
+        )
+
         refresh = RefreshToken.for_user(user)
         return Response(
             {

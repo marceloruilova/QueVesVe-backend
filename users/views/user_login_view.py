@@ -13,6 +13,13 @@ from users.constants import WRONG_CREDENTIALS_ERROR, FAILED_LOGIN_ATTEMPT, MISSI
 logger = logger_config.configure_logger()
 
 
+def _get_client_ip(request):
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
 class LoginUserAPIView(APIView):
     """
     API view for user login.
@@ -50,6 +57,14 @@ class LoginUserAPIView(APIView):
         if not user:
             logger.warning(FAILED_LOGIN_ATTEMPT, username)
             return Response({"error": WRONG_CREDENTIALS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
+
+        from users.models.login_log_model import LoginLog
+        LoginLog.objects.create(
+            user=user,
+            ip_address=_get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+            method='password',
+        )
 
         refresh = RefreshToken.for_user(user)
         return Response({

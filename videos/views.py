@@ -17,6 +17,9 @@ class VideoListCreateView(APIView):
         user_id = request.query_params.get('user_id')
         if user_id:
             qs = qs.filter(user_id=user_id)
+        category = request.query_params.get('category')
+        if category:
+            qs = qs.filter(category=category)
         serializer = VideoSerializer(qs, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
