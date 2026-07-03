@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -12,193 +11,164 @@ from videos.models import Video
 
 User = get_user_model()
 
+IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
+VIDEO_EXTS = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
+
 
 class Command(BaseCommand):
-    help = 'Carga cuentas y videos semilla desde uno o varios JSON'
+    help = (
+        'Sube videos semilla desde carpetas. '
+        'El nombre de cada carpeta es el username de la cuenta.\n\n'
+        'Ejemplos:\n'
+        '  python manage.py seed_content ../seed_data/juegos/\n'
+        '  python manage.py seed_content ../seed_data/\n'
+        '  python manage.py seed_content ../seed_data/juegos/ ../seed_data/deportes/\n'
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
-            'sources',
+            'paths',
             nargs='+',
-            metavar='json_or_dir',
-            help='Archivo(s) JSON o directorio con archivos .json',
+            metavar='carpeta',
+            help='Carpeta de cuenta (o carpeta padre con subcarpetas de cuentas)',
         )
-        parser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Muestra lo que haría sin escribir nada en la base de datos',
-        )
-        parser.add_argument(
-            '--skip-existing',
-            action='store_true',
-            default=True,
-            help='Omite usuarios y videos que ya existen (por defecto activado)',
-        )
+        parser.add_argument('--dry-run', action='store_true', help='Muestra lo que haría sin escribir nada')
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
-        skip_existing = options['skip_existing']
+        account_dirs = []
 
-        json_files = self._collect_json_files(options['sources'])
-        if not json_files:
-            raise CommandError('No se encontraron archivos JSON en las rutas indicadas.')
+        for raw in options['paths']:
+            p = Path(raw).resolve()
+            if not p.is_dir():
+                raise CommandError(f'No existe el directorio: {p}')
+            account_dirs.extend(self._resolve_accounts(p))
 
-        total_users = 0
-        total_videos = 0
-        skipped_users = 0
-        skipped_videos = 0
+        if not account_dirs:
+            raise CommandError('No se encontraron carpetas de cuentas con videos.')
 
-        for json_path in json_files:
-            self.stdout.write(f'\n→ Procesando {json_path}')
-            accounts = self._load_json(json_path)
+        total_users = total_videos = skipped = 0
 
-            for account_data in accounts:
-                username = account_data.get('username', '').strip()
-                if not username:
-                    self.stderr.write('  [!] Entrada sin username, omitida.')
-                    continue
-
-                user, user_created = self._get_or_create_user(account_data, dry_run, skip_existing)
-                if user_created:
-                    total_users += 1
-                    self.stdout.write(self.style.SUCCESS(f'  [+] Usuario creado: {username}'))
-                else:
-                    skipped_users += 1
-                    self.stdout.write(f'  [~] Usuario existente: {username}')
-
-                for video_data in account_data.get('videos', []):
-                    created = self._create_video(video_data, user, dry_run, skip_existing, json_path)
-                    if created:
-                        total_videos += 1
-                    else:
-                        skipped_videos += 1
+        for account_dir in account_dirs:
+            u_created, v_created, v_skipped = self._process_account(account_dir, dry_run)
+            total_users += u_created
+            total_videos += v_created
+            skipped += v_skipped
 
         prefix = '[DRY RUN] ' if dry_run else ''
         self.stdout.write(
             self.style.SUCCESS(
                 f'\n{prefix}Listo — '
-                f'{total_users} usuarios creados, {skipped_users} omitidos | '
-                f'{total_videos} videos creados, {skipped_videos} omitidos'
+                f'{total_users} cuentas creadas | '
+                f'{total_videos} videos subidos | '
+                f'{skipped} omitidos'
             )
         )
 
     # ------------------------------------------------------------------
 
-    def _collect_json_files(self, sources):
-        files = []
-        for source in sources:
-            p = Path(source)
-            if p.is_dir():
-                files.extend(sorted(p.glob('*.json')))
-            elif p.is_file() and p.suffix == '.json':
-                files.append(p)
-            else:
-                self.stderr.write(f'[!] No encontrado o no es JSON: {source}')
-        return files
+    def _resolve_accounts(self, path):
+        """
+        Si la carpeta tiene .mp4 directo → es una cuenta.
+        Si tiene subcarpetas → cada subcarpeta es una cuenta.
+        """
+        videos_here = [f for f in path.iterdir() if f.suffix.lower() in VIDEO_EXTS]
+        if videos_here:
+            return [path]
+        subdirs = [d for d in path.iterdir() if d.is_dir()]
+        return subdirs
 
-    def _load_json(self, path):
-        with open(path, encoding='utf-8') as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            data = [data]
-        if not isinstance(data, list):
-            raise CommandError(f'El JSON {path} debe ser un array o un objeto.')
-        return data
+    def _process_account(self, account_dir, dry_run):
+        username = account_dir.name
+        meta = self._load_meta(account_dir)
 
-    def _get_or_create_user(self, data, dry_run, skip_existing):
-        username = data['username'].strip()
-        email = data.get('email', f'{username}@seed.internal').strip()
-        password = data.get('password', 'SeedPass123!').strip()
-        bio = data.get('bio', '').strip()
+        email = meta.get('email', f'{username}@seed.internal')
+        password = meta.get('password', 'SeedPass123!')
+        bio = meta.get('bio', '')
+        default_tags = meta.get('default_tags', '')
+        default_music = meta.get('default_music', '')
+        avatar_path = meta.get('profile_picture')
 
+        self.stdout.write(f'\n→ Cuenta: {username}')
+
+        user_created = 0
         existing = User.objects.filter(username=username).first()
+
         if existing:
-            return existing, False
-
-        if dry_run:
-            fake = User(username=username, email=email, bio=bio)
-            fake.pk = -1
-            return fake, True
-
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            bio=bio,
-        )
-
-        avatar_path = data.get('profile_picture')
-        if avatar_path:
-            abs_path = Path(avatar_path)
-            if abs_path.exists():
-                with open(abs_path, 'rb') as img:
-                    user.profile_picture.save(abs_path.name, File(img), save=True)
+            user = existing
+            self.stdout.write(f'  [~] Usuario existente: {username}')
+        else:
+            if not dry_run:
+                user = User.objects.create_user(username=username, email=email, password=password, bio=bio)
+                if avatar_path:
+                    ap = Path(avatar_path)
+                    if ap.exists():
+                        with open(ap, 'rb') as f:
+                            user.profile_picture.save(ap.name, File(f), save=True)
+                    else:
+                        self.stderr.write(f'  [!] Avatar no encontrado: {avatar_path}')
             else:
-                self.stderr.write(f'    [!] Avatar no encontrado: {avatar_path}')
+                user = User(username=username, email=email)
+                user.pk = -1
+            self.stdout.write(self.style.SUCCESS(f'  [+] Usuario creado: {username}'))
+            user_created = 1
 
-        return user, True
+        videos_created = 0
+        videos_skipped = 0
 
-    def _create_video(self, data, user, dry_run, skip_existing, json_path):
-        file_path = Path(data.get('file', ''))
-        description = data.get('description', '').strip()
-        tags = data.get('tags', '').strip()
-        music = data.get('music', '').strip()
-        thumbnail_path = data.get('thumbnail')
+        video_files = sorted(f for f in account_dir.iterdir() if f.suffix.lower() in VIDEO_EXTS)
+        for vf in video_files:
+            created = self._upload_video(vf, user, default_tags, default_music, dry_run)
+            if created:
+                videos_created += 1
+            else:
+                videos_skipped += 1
 
-        if not file_path.exists():
-            self.stderr.write(f'    [!] Video no encontrado: {file_path}')
-            return False
+        return user_created, videos_created, videos_skipped
 
-        if skip_existing:
-            exists = Video.objects.filter(
+    def _upload_video(self, video_path, user, default_tags, default_music, dry_run):
+        description = video_path.stem.replace('_', ' ').replace('-', ' ')
+
+        if user.pk != -1:
+            already = Video.objects.filter(
                 user=user,
-                description=description,
-                video_file__endswith=file_path.name,
+                video_file__endswith=video_path.name,
             ).exists()
-            if exists:
-                self.stdout.write(f'    [~] Video ya existe: {file_path.name}')
+            if already:
+                self.stdout.write(f'  [~] Ya existe: {video_path.name}')
                 return False
 
         if dry_run:
-            self.stdout.write(f'    [+] (dry) Video: {file_path.name} → {user.username}')
+            self.stdout.write(f'  [+] (dry) {video_path.name}')
             return True
 
-        video = Video(
-            user=user,
-            description=description,
-            tags=tags,
-            music=music,
-        )
+        video = Video(user=user, description=description, tags=default_tags, music=default_music)
 
-        with open(file_path, 'rb') as vf:
-            video.video_file.save(file_path.name, File(vf), save=False)
+        with open(video_path, 'rb') as vf:
+            video.video_file.save(video_path.name, File(vf), save=False)
 
-        if thumbnail_path:
-            thumb = Path(thumbnail_path)
-            if thumb.exists():
-                with open(thumb, 'rb') as tf:
-                    video.thumbnail.save(thumb.name, File(tf), save=False)
-        else:
-            generated = self._extract_thumbnail(file_path)
-            if generated:
-                with open(generated, 'rb') as tf:
-                    video.thumbnail.save(f'thumb_{file_path.stem}.jpg', File(tf), save=False)
-                os.remove(generated)
+        thumb = self._extract_thumbnail(video_path)
+        if thumb:
+            with open(thumb, 'rb') as tf:
+                video.thumbnail.save(f'thumb_{video_path.stem}.jpg', File(tf), save=False)
+            os.remove(thumb)
 
         video.save()
-        self.stdout.write(self.style.SUCCESS(f'    [+] Video: {file_path.name} → {user.username}'))
+        self.stdout.write(self.style.SUCCESS(f'  [+] {video_path.name}'))
         return True
 
+    def _load_meta(self, account_dir):
+        meta_path = account_dir / 'meta.json'
+        if meta_path.exists():
+            with open(meta_path, encoding='utf-8') as f:
+                return json.load(f)
+        return {}
+
     def _extract_thumbnail(self, video_path):
-        """Extrae el primer frame con ffmpeg si está disponible."""
-        out = Path(str(video_path) + '_thumb_tmp.jpg')
+        out = Path(str(video_path) + '_thumb.jpg')
         try:
             result = subprocess.run(
-                [
-                    'ffmpeg', '-y', '-i', str(video_path),
-                    '-ss', '00:00:01', '-vframes', '1',
-                    str(out),
-                ],
+                ['ffmpeg', '-y', '-i', str(video_path), '-ss', '00:00:01', '-vframes', '1', str(out)],
                 capture_output=True,
                 timeout=30,
             )
