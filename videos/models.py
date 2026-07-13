@@ -18,6 +18,7 @@ SOURCE_TYPES = [
     ('ugc', 'Usuario'),
     ('pexels', 'Pexels'),
     ('pixabay', 'Pixabay'),
+    ('archive', 'Internet Archive'),
 ]
 
 

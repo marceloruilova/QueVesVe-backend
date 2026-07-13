@@ -14,6 +14,8 @@ User = get_user_model()
 IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
 VIDEO_EXTS = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
 
+MAX_DURATION_SECONDS = 300  # 5 minutos
+
 
 class Command(BaseCommand):
     help = (
@@ -138,6 +140,16 @@ class Command(BaseCommand):
                 self.stdout.write(f'  [~] Ya existe: {video_path.name}')
                 return False
 
+        duration = self._get_duration_seconds(video_path)
+        if duration is not None and duration > MAX_DURATION_SECONDS:
+            mins, secs = divmod(int(duration), 60)
+            self.stdout.write(
+                self.style.WARNING(
+                    f'  [!] {video_path.name} dura {mins}:{secs:02d} min (máx 5:00) — omitido'
+                )
+            )
+            return False
+
         if dry_run:
             self.stdout.write(f'  [+] (dry) {video_path.name}')
             return True
@@ -163,6 +175,20 @@ class Command(BaseCommand):
             with open(meta_path, encoding='utf-8') as f:
                 return json.load(f)
         return {}
+
+    def _get_duration_seconds(self, video_path):
+        """Retorna duración en segundos, o None si ffprobe no está disponible."""
+        try:
+            result = subprocess.run(
+                ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', str(video_path)],
+                capture_output=True, timeout=15, text=True,
+            )
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                return float(data.get('format', {}).get('duration', 0))
+        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError, KeyError):
+            pass
+        return None
 
     def _extract_thumbnail(self, video_path):
         out = Path(str(video_path) + '_thumb.jpg')

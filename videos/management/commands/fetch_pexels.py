@@ -32,6 +32,9 @@ CATEGORY_QUERY = {
 
 VALID_CATEGORIES = list(CATEGORY_QUERY.keys())
 
+MAX_API_VIDEOS = 100       # límite total de videos Pexels + Pixabay en la DB
+MAX_DURATION_SECONDS = 300 # 5 minutos
+
 
 class Command(BaseCommand):
     help = (
@@ -101,7 +104,7 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f'\n{prefix}Listo — '
                 f'{total_fetched} videos importados | '
-                f'{total_skipped} omitidos (ya existían o sin calidad ≤1080p)\n'
+                f'{total_skipped} omitidos (ya existían o sin calidad <=1080p)\n'
                 f'Todos bajo {PEXELS_LICENSE} — {PEXELS_LICENSE_URL}'
             )
         )
@@ -124,7 +127,7 @@ class Command(BaseCommand):
 
     def _process_category(self, category, api_key, count, seed_user, dry_run):
         query = CATEGORY_QUERY[category]
-        self.stdout.write(f'\n→ Categoría: {category} (query: "{query}")')
+        self.stdout.write(f'\n>> Categoria: {category} (query: "{query}")')
 
         pexels_videos = self._search_pexels(api_key, query, count, dry_run)
         if not pexels_videos:
@@ -168,9 +171,21 @@ class Command(BaseCommand):
         author = pv.get('user', {}).get('name', 'Pexels')
         source_url = pv.get('url', '')
 
-        if dry_run:
+        # Duración disponible en la respuesta JSON — no requiere descargar el archivo
+        duration = pv.get('duration', 0)
+        if duration > MAX_DURATION_SECONDS:
+            mins, secs = divmod(int(duration), 60)
             self.stdout.write(
-                f'  [dry] Video {pv["id"]} — autor: {author} — licencia: {PEXELS_LICENSE}'
+                f'  [!] {pv["id"]} dura {mins}:{secs:02d} min (máx 5:00) — omitido'
+            )
+            return False
+
+        if dry_run:
+            current = Video.objects.filter(source_type__in=['pexels', 'pixabay', 'archive']).count()
+            over = max(0, current - MAX_API_VIDEOS + 1)
+            cap_note = f' [eliminaría {over} antiguo/s para hacer espacio]' if over else ''
+            self.stdout.write(
+                f'  [dry] {pv["id"]} ({duration}s) — {author} — {PEXELS_LICENSE}{cap_note}'
             )
             return True
 
@@ -180,13 +195,29 @@ class Command(BaseCommand):
 
         video_url = self._pick_best_file(pv.get('video_files', []))
         if not video_url:
-            self.stdout.write(f'  [!] Sin calidad ≤1080p para: {pv["id"]}')
+            self.stdout.write(f'  [!] Sin calidad <=1080p para: {pv["id"]}')
             return False
 
+        self._ensure_slot()
         return self._download_and_save(pv, video_url, external_id, author, source_url, category, seed_user)
 
+    def _ensure_slot(self):
+        """Elimina el video API más antiguo si el catálogo ya llegó a MAX_API_VIDEOS."""
+        count = Video.objects.filter(source_type__in=['pexels', 'pixabay', 'archive']).count()
+        if count < MAX_API_VIDEOS:
+            return
+        oldest = Video.objects.filter(
+            source_type__in=['pexels', 'pixabay', 'archive']
+        ).order_by('created_at').first()
+        if oldest:
+            self.stdout.write(self.style.WARNING(
+                f'  [límite] {MAX_API_VIDEOS} videos API alcanzado — '
+                f'eliminando {oldest.external_id} ({oldest.category}) para hacer espacio'
+            ))
+            oldest.delete()  # activa post_delete signal → ContentImportLog automáticamente
+
     def _pick_best_file(self, video_files):
-        """Elige el archivo de mayor resolución ≤1080p. Los videos de Pexels son libres de uso comercial."""
+        """Elige el archivo de mayor resolución <=1080p. Los videos de Pexels son libres de uso comercial."""
         candidates = [
             vf for vf in video_files
             if vf.get('height', 0) <= 1080 and vf.get('link')
@@ -196,7 +227,7 @@ class Command(BaseCommand):
         return max(candidates, key=lambda vf: vf.get('height', 0))['link']
 
     def _download_and_save(self, pv, video_url, external_id, author, source_url, category, seed_user):
-        self.stdout.write(f'  ↓ Descargando {pv["id"]} — {PEXELS_LICENSE} …')
+        self.stdout.write(f'  >> Descargando {pv["id"]} — {PEXELS_LICENSE} ...')
         try:
             resp = requests.get(video_url, stream=True, timeout=60)
             resp.raise_for_status()
@@ -214,9 +245,9 @@ class Command(BaseCommand):
                     f.write(chunk)
 
             description = (
-                source_url.rstrip('/').split('/')[-2].replace('-', ' ').title()
+                source_url.rstrip('/').split('/')[-1].replace('-', ' ').title()
                 if source_url else f'Video de {category}'
-            )
+            ) or f'Video de {category}'
 
             video = Video(
                 user=seed_user,

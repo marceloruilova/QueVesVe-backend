@@ -76,7 +76,7 @@ class Command(BaseCommand):
 
     def _print_range(self, start, end):
         self.stdout.write(f'\n{"="*55}')
-        self.stdout.write(f'  REPORTE DE CONTENIDO — {start:%d/%m/%Y} → {end:%d/%m/%Y}')
+        self.stdout.write(f'  REPORTE DE CONTENIDO — {start:%d/%m/%Y} -> {end:%d/%m/%Y}')
         self.stdout.write(f'{"="*55}')
 
         current = start
@@ -116,8 +116,9 @@ class Command(BaseCommand):
             .order_by('-total')
         )
         for row in by_category:
+            cat = row["category"] or "(sin categoría)"
             self.stdout.write(
-                f'  • {row["category"] or "(sin categoría"):<14} — '
+                f'  • {cat:<14} — '
                 f'{row["total"]:>3} ({row["source_type"]})'
             )
         by_author = qs.values('author_name').annotate(total=Count('id')).order_by('-total')[:5]
@@ -148,11 +149,13 @@ class Command(BaseCommand):
         ugc = Video.objects.filter(source_type='ugc').count()
         pexels = Video.objects.filter(source_type='pexels').count()
         pixabay = Video.objects.filter(source_type='pixabay').count()
+        archive = Video.objects.filter(source_type='archive').count()
 
         self.stdout.write(f'\nTotal de videos: {total}')
-        self.stdout.write(f'  • UGC (usuarios):  {ugc}')
-        self.stdout.write(f'  • Pexels:          {pexels}')
-        self.stdout.write(f'  • Pixabay:         {pixabay}')
+        self.stdout.write(f'  * UGC (usuarios):      {ugc}')
+        self.stdout.write(f'  * Pexels:              {pexels}')
+        self.stdout.write(f'  * Pixabay:             {pixabay}')
+        self.stdout.write(f'  * Internet Archive:    {archive}')
 
         self.stdout.write('\nPor categoría (catálogo licenciado):')
         by_cat = (
@@ -163,7 +166,8 @@ class Command(BaseCommand):
             .order_by('-total')
         )
         for row in by_cat:
-            self.stdout.write(f'  • {row["category"] or "(sin categoría"):<14} {row["total"]:>4} videos')
+            cat = row["category"] or "(sin categoría)"
+            self.stdout.write(f'  • {cat:<14} {row["total"]:>4} videos')
 
         self.stdout.write('\nLogs históricos:')
         total_imports = ContentImportLog.objects.filter(action='import').count()
