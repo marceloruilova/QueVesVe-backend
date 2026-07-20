@@ -2,6 +2,7 @@ import re
 import random
 
 import requests as http_requests
+from django.conf import settings
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -96,6 +97,21 @@ class SocialAuthAPIView(APIView):
 
     @staticmethod
     def _verify_google(token: str) -> dict:
+        if not settings.GOOGLE_OAUTH_CLIENT_IDS:
+            raise ValueError('El login con Google no está configurado en el servidor.')
+
+        tokeninfo_resp = http_requests.get(
+            'https://www.googleapis.com/oauth2/v3/tokeninfo',
+            params={'access_token': token},
+            timeout=10,
+        )
+        if not tokeninfo_resp.ok:
+            raise ValueError('Token de Google inválido o expirado.')
+        tokeninfo = tokeninfo_resp.json()
+        audience = tokeninfo.get('aud') or tokeninfo.get('azp')
+        if audience not in settings.GOOGLE_OAUTH_CLIENT_IDS:
+            raise ValueError('El token de Google no fue emitido para esta aplicación.')
+
         resp = http_requests.get(
             'https://www.googleapis.com/oauth2/v3/userinfo',
             headers={'Authorization': f'Bearer {token}'},
@@ -110,6 +126,19 @@ class SocialAuthAPIView(APIView):
 
     @staticmethod
     def _verify_facebook(token: str) -> dict:
+        if not settings.FACEBOOK_APP_ID:
+            raise ValueError('El login con Facebook no está configurado en el servidor.')
+
+        app_resp = http_requests.get(
+            'https://graph.facebook.com/app',
+            params={'access_token': token},
+            timeout=10,
+        )
+        if not app_resp.ok or 'error' in app_resp.json():
+            raise ValueError('Token de Facebook inválido o expirado.')
+        if app_resp.json().get('id') != settings.FACEBOOK_APP_ID:
+            raise ValueError('El token de Facebook no fue emitido para esta aplicación.')
+
         resp = http_requests.get(
             'https://graph.facebook.com/me',
             params={'fields': 'id,name,email', 'access_token': token},

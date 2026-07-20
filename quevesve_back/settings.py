@@ -201,6 +201,35 @@ CORS_ALLOWED_ORIGINS = config(
 ).split(',')
 CORS_ALLOW_CREDENTIALS = False
 
+# Social auth — Client IDs propios contra los que se valida el `audience` de los
+# tokens de Google/Facebook, para evitar aceptar tokens emitidos para otra app.
+GOOGLE_OAUTH_CLIENT_IDS = [
+    c.strip() for c in config('GOOGLE_OAUTH_CLIENT_IDS', default='').split(',') if c.strip()
+]
+FACEBOOK_APP_ID = config('FACEBOOK_APP_ID', default='')
+
+# Notificaciones de errores 500 por email cuando DEBUG=False
+ADMINS = [('QueVesVe Admin', EMAIL_HOST_USER)] if not DEBUG and EMAIL_HOST_USER else []
+SERVER_EMAIL = EMAIL_HOST_USER or 'root@localhost'
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'default': {'format': '%(asctime)s - %(levelname)s - %(name)s - %(message)s'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'default'},
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO' if not DEBUG else 'DEBUG',
+    },
+    'loggers': {
+        'django': {'handlers': ['console'], 'level': 'INFO' if not DEBUG else 'DEBUG', 'propagate': False},
+    },
+}
+
 # Tests
 if 'test' in sys.argv or 'test_coverage' in sys.argv:
     MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')

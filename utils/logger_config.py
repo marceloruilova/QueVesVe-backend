@@ -1,5 +1,7 @@
 import logging
 
+from django.conf import settings
+
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 
 
@@ -20,7 +22,8 @@ def configure_logger():
             logger.error("An example error message.")
     """
 
-    logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
+    level = logging.DEBUG if settings.DEBUG else logging.INFO
+    logging.basicConfig(level=level, format=LOG_FORMAT)
     logger = logging.getLogger(__name__)
 
     return logger

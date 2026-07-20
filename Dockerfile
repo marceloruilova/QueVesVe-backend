@@ -24,6 +24,11 @@ RUN mkdir -p /app/staticfiles /app/media
 # Make entrypoint executable
 RUN chmod +x /app/entrypoint.sh
 
+# Run as a non-root user
+RUN groupadd -r django && useradd -r -g django django \
+    && chown -R django:django /app
+USER django
+
 EXPOSE 8000
 
 ENTRYPOINT ["/app/entrypoint.sh"]
