@@ -42,6 +42,24 @@ class VideoDetailView(APIView):
         except Video.DoesNotExist:
             return Response({'error': 'Video not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    def patch(self, request, videoid):
+        try:
+            video = Video.objects.select_related('user').prefetch_related('likes').get(pk=videoid)
+        except Video.DoesNotExist:
+            return Response({'error': 'Video not found'}, status=status.HTTP_404_NOT_FOUND)
+        if request.user.id != video.user_id:
+            return Response(
+                {'error': 'No podés editar un video que no subiste vos.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        editable_fields = {'description', 'tags', 'music'}
+        data = {k: v for k, v in request.data.items() if k in editable_fields}
+        serializer = VideoSerializer(video, data=data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class VideoLikeView(APIView):
     permission_classes = [IsAuthenticated]
