@@ -1,7 +1,6 @@
-import shutil
-
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+from django.db.models import Sum
 
 from videos.models import Video
 
@@ -14,31 +13,34 @@ NON_UGC_SOURCES = ['pexels', 'pixabay', 'archive']
 
 class Command(BaseCommand):
     help = (
-        'Limpieza selectiva de storage: si el uso de disco de MEDIA_ROOT supera '
-        '--threshold, borra videos del catalogo propio (Pexels/Pixabay/Archive), '
-        'del mas antiguo al mas nuevo, hasta bajar de --target. Nunca borra '
-        'contenido subido por usuarios (UGC).\n\n'
+        'Limpieza selectiva de storage: si el peso total del catálogo propio '
+        '(Pexels/Pixabay/Archive, medido en la DB vía Video.file_size) supera '
+        '--budget-bytes, borra videos del catalogo propio, del mas antiguo al '
+        'mas nuevo, hasta bajar de --target-bytes. Nunca borra contenido subido '
+        'por usuarios (UGC).\n\n'
+        'Mide el peso del catálogo en la DB (no en disco local) para funcionar '
+        'igual sea el storage filesystem local o Cloudflare R2.\n\n'
         'Pensado para correr por cron/scheduler periodicamente.\n\n'
         'Ejemplos:\n'
         '  python manage.py cleanup_storage --dry-run\n'
-        '  python manage.py cleanup_storage --threshold 90 --target 80\n'
+        '  python manage.py cleanup_storage --budget-bytes 5000000000 --target-bytes 4000000000\n'
         '  python manage.py cleanup_storage --limit 50\n'
     )
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--threshold',
-            type=float,
-            default=90.0,
-            metavar='PCT',
-            help='%% de uso de disco que dispara la limpieza (default: 90)',
+            '--budget-bytes',
+            type=int,
+            default=None,
+            metavar='BYTES',
+            help='Peso del catalogo que dispara la limpieza (default: CATALOG_STORAGE_BUDGET_BYTES)',
         )
         parser.add_argument(
-            '--target',
-            type=float,
-            default=80.0,
-            metavar='PCT',
-            help='%% de uso de disco al que se intenta bajar (default: 80)',
+            '--target-bytes',
+            type=int,
+            default=None,
+            metavar='BYTES',
+            help='Peso al que se intenta bajar el catalogo (default: 80%% del budget)',
         )
         parser.add_argument(
             '--limit',
@@ -54,26 +56,31 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        threshold = options['threshold']
-        target = options['target']
+        budget = options['budget_bytes']
+        if budget is None:
+            budget = settings.CATALOG_STORAGE_BUDGET_BYTES
+        target = options['target_bytes']
+        if target is None:
+            target = int(budget * 0.8)
         limit = options['limit']
         dry_run = options['dry_run']
 
-        if target >= threshold:
-            raise CommandError('--target debe ser menor que --threshold')
+        if target >= budget:
+            raise CommandError('--target-bytes debe ser menor que --budget-bytes')
 
-        used_pct = self._disk_used_pct()
-        self.stdout.write(f'Uso de disco actual en MEDIA_ROOT: {used_pct:.1f}%')
+        used_bytes = self._catalog_used_bytes()
+        self.stdout.write(f'Peso actual del catálogo propio: {self._human(used_bytes)}')
 
-        if used_pct < threshold:
+        if used_bytes < budget:
             self.stdout.write(self.style.SUCCESS(
-                f'Por debajo del umbral ({threshold}%%) -- no se requiere limpieza.'
+                f'Por debajo del presupuesto ({self._human(budget)}) -- no se requiere limpieza.'
             ))
             return
 
         self.stdout.write(self.style.WARNING(
-            f'Uso de disco ({used_pct:.1f}%%) supera el umbral ({threshold}%%) -- '
-            f'iniciando limpieza selectiva (objetivo: {target}%%).'
+            f'Peso del catálogo ({self._human(used_bytes)}) supera el presupuesto '
+            f'({self._human(budget)}) -- iniciando limpieza selectiva '
+            f'(objetivo: {self._human(target)}).'
         ))
 
         candidate_ids = list(
@@ -93,14 +100,14 @@ class Command(BaseCommand):
                 ))
                 break
 
-            if self._disk_used_pct() <= target:
+            if used_bytes <= target:
                 break
 
             video = Video.objects.filter(id=video_id).first()
             if not video:
                 continue
 
-            size = self._file_size(video)
+            size = video.file_size
 
             self.stdout.write(
                 f'  {prefix}[-] {video.external_id or video.id} '
@@ -111,35 +118,28 @@ class Command(BaseCommand):
 
             deleted += 1
             freed_bytes += size
-
-        final_pct = self._disk_used_pct()
+            used_bytes -= size
 
         if deleted == 0:
             self.stdout.write(self.style.WARNING(
                 f'{prefix}No habia videos propios (Pexels/Pixabay/Archive) para eliminar. '
-                'El uso de disco sigue por encima del umbral y el resto es contenido de '
+                'El catálogo sigue por encima del presupuesto y el resto es contenido de '
                 'usuarios (UGC) -- no se toca automaticamente. Requiere intervencion manual '
                 'o una politica de prioridades para UGC.'
             ))
         else:
             self.stdout.write(self.style.SUCCESS(
                 f'{prefix}Listo -- {deleted} videos eliminados, '
-                f'~{self._human(freed_bytes)} liberados. Uso de disco ahora: {final_pct:.1f}%.'
+                f'~{self._human(freed_bytes)} liberados. Peso del catálogo ahora: '
+                f'{self._human(used_bytes)}.'
             ))
 
     # ------------------------------------------------------------------
 
-    def _disk_used_pct(self):
-        usage = shutil.disk_usage(settings.MEDIA_ROOT)
-        return usage.used / usage.total * 100
-
-    def _file_size(self, video):
-        try:
-            if video.video_file and video.video_file.storage.exists(video.video_file.name):
-                return video.video_file.size
-        except (ValueError, OSError):
-            pass
-        return 0
+    def _catalog_used_bytes(self):
+        return Video.objects.filter(source_type__in=NON_UGC_SOURCES).aggregate(
+            total=Sum('file_size')
+        )['total'] or 0
 
     @staticmethod
     def _human(num_bytes):

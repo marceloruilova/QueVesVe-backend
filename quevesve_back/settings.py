@@ -37,6 +37,7 @@ THIRD_PARTY_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
+    'storages',
 ]
 
 LOCAL_APPS = [
@@ -165,6 +166,36 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# Storage de media (video/thumbnails/fotos de perfil) — Cloudflare R2 en producción para
+# evitar cargos de egress de DigitalOcean; filesystem local en dev/tests. MEDIA_ROOT sigue
+# usándose como origen para el comando de migración `migrate_media_to_r2` y en dev/tests.
+USE_R2_STORAGE = config('USE_R2_STORAGE', default=False, cast=bool) and not (
+    'test' in sys.argv or 'test_coverage' in sys.argv
+)
+
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+}
+
+if USE_R2_STORAGE:
+    STORAGES['default'] = {
+        'BACKEND': 'storages.backends.s3.S3Storage',
+        'OPTIONS': {
+            'access_key': config('R2_ACCESS_KEY_ID'),
+            'secret_key': config('R2_SECRET_ACCESS_KEY'),
+            'bucket_name': config('R2_BUCKET_NAME'),
+            'endpoint_url': config('R2_ENDPOINT_URL'),
+            'region_name': 'auto',
+            'signature_version': 's3v4',
+            'addressing_style': 'virtual',
+            'custom_domain': config('R2_PUBLIC_DOMAIN'),
+            'querystring_auth': False,
+            'file_overwrite': False,
+            'default_acl': None,
+        },
+    }
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
@@ -214,6 +245,12 @@ UGC_STORAGE_QUOTA_BYTES = config('UGC_STORAGE_QUOTA_BYTES', default=500 * 1024 *
 UGC_COMPRESS_MAX_HEIGHT = config('UGC_COMPRESS_MAX_HEIGHT', default=720, cast=int)
 UGC_COMPRESS_VIDEO_BITRATE = config('UGC_COMPRESS_VIDEO_BITRATE', default='2500k')
 UGC_COMPRESS_AUDIO_BITRATE = config('UGC_COMPRESS_AUDIO_BITRATE', default='128k')
+
+# Presupuesto de almacenamiento del catálogo propio (Pexels/Pixabay/Archive), usado por
+# el comando cleanup_storage para decidir cuándo purgar el contenido más viejo.
+CATALOG_STORAGE_BUDGET_BYTES = config(
+    'CATALOG_STORAGE_BUDGET_BYTES', default=5 * 1024 * 1024 * 1024, cast=int,
+)
 
 # Notificaciones de errores 500 por email cuando DEBUG=False
 ADMINS = [('QueVesVe Admin', EMAIL_HOST_USER)] if not DEBUG and EMAIL_HOST_USER else []

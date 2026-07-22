@@ -1,3 +1,7 @@
+import os
+import shutil
+import tempfile
+
 from django.core.management.base import BaseCommand
 
 from videos.media_utils import get_duration_seconds
@@ -82,10 +86,25 @@ class Command(BaseCommand):
 
     def _duration(self, video):
         try:
-            path = video.video_file.path
-        except (ValueError, NotImplementedError):
+            return get_duration_seconds(video.video_file.path)
+        except ValueError:
             return None
-        return get_duration_seconds(path)
+        except NotImplementedError:
+            pass
+        # Storage remoto (ej. R2) -- no hay path local, bajamos el archivo a un
+        # temporal para poder correr ffprobe sobre él.
+        tmp_path = None
+        try:
+            with video.video_file.open('rb') as remote_file:
+                with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_file:
+                    tmp_path = tmp_file.name
+                    shutil.copyfileobj(remote_file, tmp_file)
+            return get_duration_seconds(tmp_path)
+        except (ValueError, OSError):
+            return None
+        finally:
+            if tmp_path:
+                os.remove(tmp_path)
 
     @staticmethod
     def _fmt_duration(duration):
