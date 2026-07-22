@@ -8,6 +8,7 @@ from django.http import HttpRequest
 from users.serializers import CustomUserSerializer
 from users.models.email_verification_token_model import EmailVerificationToken
 from users.services.email_service import send_verification_email
+from quevesve_back.throttles import RegisterRateThrottle
 
 
 class RegisterUserAPIView(APIView):
@@ -21,6 +22,8 @@ class RegisterUserAPIView(APIView):
     - Response: The HTTP response object containing the serialized user data if the registration
       is successful, or the validation errors if the provided data is invalid.
     """
+
+    throttle_classes = [RegisterRateThrottle]
 
     def post(self, request: HttpRequest) -> Response:
         """

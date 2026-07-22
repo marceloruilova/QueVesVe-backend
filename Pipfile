@@ -20,6 +20,7 @@ pipfile = "*"
 pylint-django = "*"
 django-storages = {extras = ["s3"], version = "*"}
 boto3 = "*"
+django-redis = "*"
 
 [dev-packages]
 

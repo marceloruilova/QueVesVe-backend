@@ -8,16 +8,11 @@ from rest_framework.exceptions import ValidationError
 from django.contrib.auth import authenticate
 
 from utils import logger_config
+from utils.request_utils import get_client_ip
 from users.constants import WRONG_CREDENTIALS_ERROR, FAILED_LOGIN_ATTEMPT, MISSING_FIELD_ERROR
+from quevesve_back.throttles import LoginRateThrottle
 
 logger = logger_config.configure_logger()
-
-
-def _get_client_ip(request):
-    forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
-    if forwarded:
-        return forwarded.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR')
 
 
 class LoginUserAPIView(APIView):
@@ -34,6 +29,8 @@ class LoginUserAPIView(APIView):
     - Response: The HTTP response object containing the refresh and access tokens if
       the login is successful, or an error message if the provided credentials are invalid.
     """
+
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request: HttpRequest) -> Response:
         """
@@ -62,7 +59,7 @@ class LoginUserAPIView(APIView):
         from users.models.login_log_model import LoginLog
         LoginLog.objects.create(
             user=user,
-            ip_address=_get_client_ip(request),
+            ip_address=get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
             method='password',
         )

@@ -24,8 +24,9 @@ class VideoFeedTest(APITestCase):
         """GET /videos/ must include user_id so the frontend can navigate to the profile."""
         response = self.client.get(reverse('video_list_create'))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(len(response.data) > 0)
-        first = response.data[0]
+        results = response.data['results']
+        self.assertTrue(len(results) > 0)
+        first = results[0]
         self.assertIn('user_id', first)
         self.assertEqual(first['user_id'], self.user.id)
         self.assertIn('username', first)
@@ -38,4 +39,4 @@ class VideoFeedTest(APITestCase):
 
         response = self.client.get(f"{reverse('video_list_create')}?user_id={self.user.id}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(all(v['user_id'] == self.user.id for v in response.data))
+        self.assertTrue(all(v['user_id'] == self.user.id for v in response.data['results']))

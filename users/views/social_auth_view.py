@@ -11,13 +11,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from users.models.custom_user_models import CustomUser
 from users.serializers import CustomUserSerializer
-
-
-def _get_client_ip(request):
-    forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
-    if forwarded:
-        return forwarded.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR')
+from utils.request_utils import get_client_ip
+from quevesve_back.throttles import SocialAuthRateThrottle
 
 
 def _generate_unique_username(email_prefix: str) -> str:
@@ -48,6 +43,7 @@ def _get_or_create_social_user(email: str, name: str) -> CustomUser:
 
 class SocialAuthAPIView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [SocialAuthRateThrottle]
 
     def post(self, request) -> Response:
         provider = request.data.get('provider')
@@ -78,7 +74,7 @@ class SocialAuthAPIView(APIView):
         from users.models.login_log_model import LoginLog
         LoginLog.objects.create(
             user=user,
-            ip_address=_get_client_ip(request),
+            ip_address=get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
             method=provider,
         )

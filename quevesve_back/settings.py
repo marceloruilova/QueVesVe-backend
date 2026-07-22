@@ -63,6 +63,22 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'EXCEPTION_HANDLER': 'quevesve_back.exceptions.custom_exception_handler',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/min',
+        'user': '300/min',
+        'login': '5/min',
+        'register': '3/min',
+        'social_auth': '10/min',
+        'video_upload': '6/hour',
+    },
+    # nginx es el único proxy confiable delante de Django (Cloudflare -> nginx -> Django),
+    # así DRF toma el hop correcto de X-Forwarded-For para el rate limiting por IP en vez
+    # de confiar en un valor que un cliente podría intentar falsificar.
+    'NUM_PROXIES': 1,
 }
 
 SIMPLE_JWT = {
@@ -72,6 +88,28 @@ SIMPLE_JWT = {
 
 
 AUTH_USER_MODEL = 'users.CustomUser'
+
+# Cache compartido (contadores de rate limiting de DRF). Sin Redis, el cache por defecto
+# es LocMemCache por proceso, que NO se comparte entre workers de Gunicorn ni entre
+# réplicas del contenedor `web` — el throttling sería inconsistente en producción.
+REDIS_URL = config('REDIS_URL', default='')
+
+if 'test' in sys.argv or 'test_coverage' in sys.argv:
+    # Nunca requerir un Redis corriendo para la suite de tests / CI.
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
+elif REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {'CLIENT_CLASS': 'django_redis.client.DefaultClient'},
+            'KEY_PREFIX': 'quevesve',
+        }
+    }
+else:
+    # Fallback de conveniencia para dev (un solo proceso `runserver`): los contadores de
+    # throttling no se comparten entre procesos, así que producción DEBE setear REDIS_URL.
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -277,3 +315,28 @@ LOGGING = {
 # Tests
 if 'test' in sys.argv or 'test_coverage' in sys.argv:
     MEDIA_ROOT = os.path.join(BASE_DIR, 'test_media')
+
+    # El cache (LocMemCache, ver arriba) persiste durante toda la corrida de tests, y ahí
+    # es donde DRF guarda los contadores de rate limiting. Sin limpiarlo entre tests, los
+    # contadores se acumulan entre métodos/clases y pueden producir 429 en tests que no
+    # tienen nada que ver con throttling. Se limpia antes de cada test individual.
+    # `_pre_setup` es un classmethod en Django >=6 y un método de instancia en versiones
+    # previas — se detecta la forma real para no romper el binding en ningún caso.
+    from django.test.testcases import SimpleTestCase
+    from django.core.cache import cache as _cache
+
+    _original_pre_setup = SimpleTestCase.__dict__['_pre_setup']
+
+    if isinstance(_original_pre_setup, classmethod):
+        _original_pre_setup_func = _original_pre_setup.__func__
+
+        @classmethod
+        def _pre_setup_and_clear_cache(cls, *args, **kwargs):
+            _cache.clear()
+            return _original_pre_setup_func(cls, *args, **kwargs)
+    else:
+        def _pre_setup_and_clear_cache(self, *args, **kwargs):
+            _cache.clear()
+            return _original_pre_setup(self, *args, **kwargs)
+
+    SimpleTestCase._pre_setup = _pre_setup_and_clear_cache

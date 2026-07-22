@@ -14,6 +14,8 @@ from django.db.models import Q, F, Sum
 from videos.models import Video, Like, Comment
 from videos.serializers import VideoSerializer, CommentSerializer
 from videos.media_utils import get_duration_seconds, compress_video
+from videos.pagination import VideoPagination
+from quevesve_back.throttles import VideoUploadRateThrottle
 
 
 def _ugc_used_bytes(user):
@@ -25,6 +27,11 @@ def _ugc_used_bytes(user):
 class VideoListCreateView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [VideoUploadRateThrottle()]
+        return super().get_throttles()
+
     def get(self, request):
         qs = Video.objects.select_related('user').prefetch_related('likes').all()
         user_id = request.query_params.get('user_id')
@@ -33,8 +40,10 @@ class VideoListCreateView(APIView):
         category = request.query_params.get('category')
         if category:
             qs = qs.filter(category=category)
-        serializer = VideoSerializer(qs, many=True, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        paginator = VideoPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        serializer = VideoSerializer(page, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
         serializer = VideoSerializer(data=request.data, context={'request': request})
@@ -213,8 +222,10 @@ class VideoSearchView(APIView):
 
     def get(self, request):
         q = request.query_params.get('q', '').strip()
+        paginator = VideoPagination()
         if not q:
-            return Response([], status=status.HTTP_200_OK)
+            paginator.paginate_queryset(Video.objects.none(), request, view=self)
+            return paginator.get_paginated_response([])
         qs = (
             Video.objects
             .select_related('user')
@@ -225,8 +236,9 @@ class VideoSearchView(APIView):
                 Q(music__icontains=q)
             )
         )
-        serializer = VideoSerializer(qs, many=True, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        page = paginator.paginate_queryset(qs, request, view=self)
+        serializer = VideoSerializer(page, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)
 
 
 class VideoTopView(APIView):

@@ -19,5 +19,14 @@ services:
       timeout: 5s
       retries: 5
 
+  # Opcional: solo necesario si querés probar rate limiting real contra Redis
+  # corriendo `manage.py runserver` local. Sin esto, settings.py cae a LocMemCache.
+  redis:
+    image: redis:7-alpine
+    container_name: quevesve-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
 volumes:
   postgres_dev_data:
