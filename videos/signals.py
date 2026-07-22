@@ -5,7 +5,7 @@ from django.dispatch import receiver
 @receiver(post_delete, sender='videos.Video')
 def log_licensed_video_deletion(sender, instance, **kwargs):
     from videos.models import ContentImportLog
-    if instance.source_type not in ('pexels', 'pixabay'):
+    if instance.source_type not in ('pexels', 'pixabay', 'archive'):
         return
     ContentImportLog.objects.create(
         video=None,
