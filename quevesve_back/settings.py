@@ -208,6 +208,13 @@ GOOGLE_OAUTH_CLIENT_IDS = [
 ]
 FACEBOOK_APP_ID = config('FACEBOOK_APP_ID', default='')
 
+# Límites y compresión de video subido por usuarios (UGC)
+MAX_UGC_VIDEO_DURATION_SECONDS = config('MAX_UGC_VIDEO_DURATION_SECONDS', default=60, cast=int)
+UGC_STORAGE_QUOTA_BYTES = config('UGC_STORAGE_QUOTA_BYTES', default=500 * 1024 * 1024, cast=int)
+UGC_COMPRESS_MAX_HEIGHT = config('UGC_COMPRESS_MAX_HEIGHT', default=720, cast=int)
+UGC_COMPRESS_VIDEO_BITRATE = config('UGC_COMPRESS_VIDEO_BITRATE', default='2500k')
+UGC_COMPRESS_AUDIO_BITRATE = config('UGC_COMPRESS_AUDIO_BITRATE', default='128k')
+
 # Notificaciones de errores 500 por email cuando DEBUG=False
 ADMINS = [('QueVesVe Admin', EMAIL_HOST_USER)] if not DEBUG and EMAIL_HOST_USER else []
 SERVER_EMAIL = EMAIL_HOST_USER or 'root@localhost'

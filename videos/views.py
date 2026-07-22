@@ -1,12 +1,25 @@
+import os
+import shutil
+import tempfile
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 
-from django.db.models import Q, F
+from django.conf import settings
+from django.core.files import File
+from django.db.models import Q, F, Sum
 
 from videos.models import Video, Like, Comment
 from videos.serializers import VideoSerializer, CommentSerializer
+from videos.media_utils import get_duration_seconds, compress_video
+
+
+def _ugc_used_bytes(user):
+    return Video.objects.filter(user=user, source_type='ugc').aggregate(
+        total=Sum('file_size')
+    )['total'] or 0
 
 
 class VideoListCreateView(APIView):
@@ -25,10 +38,81 @@ class VideoListCreateView(APIView):
 
     def post(self, request):
         serializer = VideoSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            serializer.save(user=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        uploaded_file = request.data['video_file']
+        client_compressed = str(request.data.get('client_compressed', '')).lower() == 'true'
+
+        tmp_dir = tempfile.mkdtemp(prefix='ugc_upload_')
+        try:
+            input_path = os.path.join(tmp_dir, 'input.mp4')
+            with open(input_path, 'wb') as f:
+                for chunk in uploaded_file.chunks():
+                    f.write(chunk)
+
+            duration = get_duration_seconds(input_path)
+            if duration is not None and duration > settings.MAX_UGC_VIDEO_DURATION_SECONDS:
+                return Response({
+                    'error': 'duration_exceeded',
+                    'detail': (
+                        f'El video supera el límite de '
+                        f'{settings.MAX_UGC_VIDEO_DURATION_SECONDS} segundos.'
+                    ),
+                    'max_duration_seconds': settings.MAX_UGC_VIDEO_DURATION_SECONDS,
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            used_bytes = _ugc_used_bytes(request.user)
+            limit_bytes = settings.UGC_STORAGE_QUOTA_BYTES
+            raw_size = os.path.getsize(input_path)
+            if used_bytes + raw_size > limit_bytes:
+                return self._quota_exceeded_response(used_bytes, limit_bytes)
+
+            final_path = input_path
+            if not client_compressed:
+                compressed_path = os.path.join(tmp_dir, 'compressed.mp4')
+                if compress_video(input_path, compressed_path):
+                    final_path = compressed_path
+
+            final_size = os.path.getsize(final_path)
+            if used_bytes + final_size > limit_bytes:
+                return self._quota_exceeded_response(used_bytes, limit_bytes)
+
+            with open(final_path, 'rb') as f:
+                serializer.validated_data['video_file'] = File(f, name=uploaded_file.name)
+                video = serializer.save(
+                    user=request.user, file_size=final_size, duration_seconds=duration,
+                )
+
+            return Response(
+                VideoSerializer(video, context={'request': request}).data,
+                status=status.HTTP_201_CREATED,
+            )
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    @staticmethod
+    def _quota_exceeded_response(used_bytes, limit_bytes):
+        return Response({
+            'error': 'quota_exceeded',
+            'detail': 'No tenés espacio suficiente disponible. Borrá videos viejos para poder subir uno nuevo.',
+            'used_bytes': used_bytes,
+            'limit_bytes': limit_bytes,
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class VideoQuotaView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        used_bytes = _ugc_used_bytes(request.user)
+        limit_bytes = settings.UGC_STORAGE_QUOTA_BYTES
+        return Response({
+            'used_bytes': used_bytes,
+            'limit_bytes': limit_bytes,
+            'remaining_bytes': max(0, limit_bytes - used_bytes),
+            'used_pct': round(used_bytes / limit_bytes * 100, 1) if limit_bytes else 0,
+        }, status=status.HTTP_200_OK)
 
 
 class VideoDetailView(APIView):

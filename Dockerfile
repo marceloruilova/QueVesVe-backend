@@ -18,6 +18,10 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy project source
 COPY . .
 
+# ffmpeg/ffprobe: usados para validar duración y comprimir video subido por usuarios
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create dirs for static and media files
 RUN mkdir -p /app/staticfiles /app/media
 
