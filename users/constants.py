@@ -1,6 +1,7 @@
 USER_WITH_ID_NOT_FOUND = "User with ID %s does not exist."
 USER_NOT_FOUND_MESSAGE = "User not found."
 WRONG_CREDENTIALS_ERROR = "Wrong credentials."
+ACCOUNT_LOCKED_ERROR = "Too many failed attempts. Try again later."
 FAILED_LOGIN_ATTEMPT = "Failed login attempt for username: %s"
 MISSING_FIELD_ERROR = "Missing field: "
 PASSWORD_TOO_WEAK = "La contraseña no cumple los requisitos de seguridad."

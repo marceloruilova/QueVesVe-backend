@@ -49,7 +49,14 @@ class LoginUserAPIView(APIView):
         except KeyError as e:
             raise ValidationError(f'{MISSING_FIELD_ERROR} {e.args[0]}') from e
 
-        user = authenticate(username=username, password=password)
+        # Si axes bloqueó la cuenta, esta respuesta es descartada y reemplazada por
+        # axes.middleware.AxesMiddleware usando AXES_LOCKOUT_CALLABLE (ver settings.py).
+        # Se pasa request._request (el HttpRequest crudo de Django) y no el wrapper de
+        # DRF: axes marca el bloqueo seteando un atributo sobre el objeto request, y ese
+        # middleware corre fuera de DRF, inspeccionando el HttpRequest original — si le
+        # pasáramos el wrapper de DRF, el atributo quedaría en un objeto que el middleware
+        # nunca llega a ver.
+        user = authenticate(request=request._request, username=username, password=password)
 
         if not user:
             logger.warning(FAILED_LOGIN_ATTEMPT, username)

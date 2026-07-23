@@ -38,6 +38,7 @@ THIRD_PARTY_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'storages',
+    'axes',
 ]
 
 LOCAL_APPS = [
@@ -89,6 +90,31 @@ SIMPLE_JWT = {
 
 AUTH_USER_MODEL = 'users.CustomUser'
 
+# django-axes: lockout de cuentas tras intentos fallidos de login, capa adicional al
+# rate limiting (que solo limita ráfagas por minuto). Axes acumula fallos a lo largo de
+# AXES_COOLOFF_TIME entero, así que frena también a un atacante que reintenta lento para
+# esquivar el throttle por minuto.
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# Bloquea si CUALQUIERA de los dos contadores llega al límite: por username (protege una
+# cuenta puntual de credential stuffing aunque el atacante rote de IP) o por IP (protege
+# contra un atacante probando muchos usuarios distintos desde el mismo origen). El costo de
+# esta elección: alguien que sepa un username válido podría, a propósito, bloquear esa
+# cuenta por una hora fallando el login adrede — trade-off aceptado, es el mismo que usan
+# la mayoría de apps con este tipo de protección.
+AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(hours=1)
+AXES_RESET_ON_SUCCESS = True
+# Evita que reintentos durante el lockout extiendan el cooloff indefinidamente.
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
+# Sin esto, axes.middleware.AxesMiddleware reemplaza la respuesta con su página HTML de
+# bloqueo por default, sin importar lo que devuelva la vista de login.
+AXES_LOCKOUT_CALLABLE = 'quevesve_back.axes_handlers.axes_lockout_response'
+
 # Cache compartido (contadores de rate limiting de DRF). Sin Redis, el cache por defecto
 # es LocMemCache por proceso, que NO se comparte entre workers de Gunicorn ni entre
 # réplicas del contenedor `web` — el throttling sería inconsistente en producción.
@@ -120,6 +146,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Debe ir al final: procesa la respuesta cuando axes.backends.AxesBackend
+    # bloqueó un intento de login por lockout.
+    'axes.middleware.AxesMiddleware',
 ]
 
 ROOT_URLCONF = 'quevesve_back.urls'

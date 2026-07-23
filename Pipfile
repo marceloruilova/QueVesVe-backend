@@ -21,6 +21,7 @@ pylint-django = "*"
 django-storages = {extras = ["s3"], version = "*"}
 boto3 = "*"
 django-redis = "*"
+django-axes = "*"
 
 [dev-packages]
 
